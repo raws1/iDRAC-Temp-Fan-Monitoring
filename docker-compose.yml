@@ -1,0 +1,39 @@
+services:
+  delltemps:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: delltemps
+    restart: unless-stopped
+    environment:
+      IDRAC_HOST: "${IDRAC_HOST}"
+      IDRAC_USER: "${IDRAC_USER}"
+      IDRAC_PASSWORD: "${IDRAC_PASSWORD}"
+      IDRAC_ENCRYPTION_KEY: "${IDRAC_ENCRYPTION_KEY:-0000000000000000000000000000000000000000}"
+      CHECK_INTERVAL_SECONDS: "${CHECK_INTERVAL_SECONDS:-180}"
+      INTERVAL_SECONDS: "${INTERVAL_SECONDS:-}"
+      DURATION_SECONDS: "${DURATION_SECONDS:-0}"
+      ENABLE_POWEREDGE_SHUTUP: "${ENABLE_POWEREDGE_SHUTUP:-1}"
+      FANCONTROL_INTERVAL_SECONDS: "${FANCONTROL_INTERVAL_SECONDS:-}"
+      TZ: "${TZ:-America/New_York}"
+      ALERT_EMAIL_ENABLED: "${ALERT_EMAIL_ENABLED:-0}"
+      ALERT_TEMP_THRESHOLD_F: "${ALERT_TEMP_THRESHOLD_F:-120}"
+      ALERT_EMAIL_TEST_ON_START: "${ALERT_EMAIL_TEST_ON_START:-0}"
+      ALERT_EMAIL_TO: "${ALERT_EMAIL_TO:-}"
+      ALERT_EMAIL_FROM: "${ALERT_EMAIL_FROM:-}"
+      ALERT_SMTP_HOST: "${ALERT_SMTP_HOST:-}"
+      ALERT_SMTP_PORT: "${ALERT_SMTP_PORT:-587}"
+      ALERT_SMTP_USERNAME: "${ALERT_SMTP_USERNAME:-}"
+      ALERT_SMTP_PASSWORD: "${ALERT_SMTP_PASSWORD:-}"
+      ALERT_SMTP_STARTTLS: "${ALERT_SMTP_STARTTLS:-1}"
+      ALERT_SMTP_SSL: "${ALERT_SMTP_SSL:-0}"
+      ALERT_EMAIL_SUBJECT_PREFIX: "${ALERT_EMAIL_SUBJECT_PREFIX:-delltemps}"
+      HTTP_BIND: "0.0.0.0"
+      HTTP_PORT: "8580"
+      OUTPUT_DIR: "/data"
+    ports:
+      - "8580:8580"
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+    volumes:
+      - ./container-data:/data

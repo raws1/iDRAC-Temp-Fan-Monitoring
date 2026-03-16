@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="refresh" content="60">
+  <title>iDRAC Temp/Fan Monitoring</title>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+    body {
+      margin: 0;
+      padding: clamp(12px, 2vw, 24px);
+      font-family: Menlo, Monaco, monospace;
+      background: #0d1117;
+      color: #e6edf3;
+    }
+    .page {
+      width: min(96vw, 1680px);
+      margin: 0 auto;
+    }
+    h1 {
+      margin: 0 0 16px;
+      font-size: 24px;
+    }
+    h2 {
+      margin: 0 0 10px;
+      font-size: 16px;
+      color: #c9d1d9;
+    }
+    h3 {
+      margin: 0 0 10px;
+      font-size: 14px;
+      color: #f0f6fc;
+    }
+    p {
+      margin: 0;
+    }
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.65fr) minmax(320px, 0.95fr);
+      grid-template-areas:
+        "temp curve"
+        "fan curve"
+        "log log";
+      gap: 20px;
+      align-items: start;
+    }
+    .dashboard-grid > * {
+      min-width: 0;
+    }
+    .side-column {
+      grid-area: curve;
+      display: grid;
+      gap: 20px;
+      align-self: start;
+    }
+    .history-section {
+      margin: 0;
+    }
+    .temperature-section {
+      grid-area: temp;
+    }
+    .fan-section {
+      grid-area: fan;
+    }
+    .history-card {
+      margin: 0;
+      border: 1px solid #30363d;
+      background: #161b22;
+      padding: 10px;
+      border-radius: 8px;
+    }
+    .log-panel {
+      grid-area: log;
+      margin: 0;
+      border: 1px solid #30363d;
+      background: #161b22;
+      padding: 10px;
+      border-radius: 8px;
+    }
+    .curve-panel {
+      margin: 0;
+      border: 1px solid #30363d;
+      background: #161b22;
+      padding: 14px;
+      border-radius: 8px;
+    }
+    .curve-panel p {
+      color: #8b949e;
+      font-size: 13px;
+      margin-bottom: 14px;
+      line-height: 1.4;
+    }
+    .summary-panel {
+      margin: 0;
+      border: 1px solid #30363d;
+      background: #161b22;
+      padding: 14px;
+      border-radius: 8px;
+    }
+    .alert-panel {
+      margin: 0;
+      border: 1px solid #30363d;
+      background: #161b22;
+      padding: 14px;
+      border-radius: 8px;
+    }
+    .summary-panel p {
+      color: #8b949e;
+      font-size: 13px;
+      margin-bottom: 10px;
+      line-height: 1.4;
+    }
+    .summary-note {
+      font-size: 12px;
+      color: #8b949e;
+    }
+    .summary-sensors {
+      display: grid;
+      gap: 14px;
+    }
+    .sensor-summary {
+      border: 1px solid #21262d;
+      background: #0d1117;
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .sensor-summary h3 {
+      margin-bottom: 12px;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .alert-status-panel {
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid #21262d;
+    }
+    .alert-panel .alert-status-panel {
+      margin-top: 0;
+      padding-top: 0;
+      border-top: 0;
+    }
+    .alert-status-panel p {
+      color: #8b949e;
+      font-size: 13px;
+    }
+    .alert-meta {
+      display: grid;
+      gap: 10px;
+    }
+    .curve-meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .metric {
+      border: 1px solid #21262d;
+      background: #0d1117;
+      border-radius: 8px;
+      padding: 10px;
+    }
+    .metric-label {
+      display: block;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #8b949e;
+      margin-bottom: 6px;
+    }
+    .metric-value {
+      display: block;
+      font-size: 14px;
+      color: #f0f6fc;
+    }
+    .status-active {
+      color: #3fb950;
+      font-weight: 700;
+    }
+    .status-inactive {
+      color: #8b949e;
+    }
+    .curve-group + .curve-group {
+      margin-top: 16px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid #21262d;
+      background: #0d1117;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th,
+    td {
+      padding: 9px 10px;
+      text-align: left;
+      border-bottom: 1px solid #21262d;
+      font-size: 13px;
+    }
+    tr:last-child td {
+      border-bottom: 0;
+    }
+    th {
+      color: #8b949e;
+      font-weight: 600;
+      background: #11161d;
+    }
+    td {
+      color: #e6edf3;
+    }
+    img {
+      width: 100%;
+      max-width: 1100px;
+      max-height: 42vh;
+      height: auto;
+      display: block;
+      margin: 0 auto;
+      object-fit: contain;
+    }
+    .history-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .history-tab {
+      border: 1px solid #30363d;
+      background: #11161d;
+      color: #c9d1d9;
+      border-radius: 999px;
+      padding: 8px 14px;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+    .history-tab:hover {
+      border-color: #58a6ff;
+      color: #f0f6fc;
+    }
+    .history-tab.is-active {
+      background: #1f6feb;
+      border-color: #1f6feb;
+      color: #ffffff;
+    }
+    .history-view {
+      border: 1px solid #21262d;
+      background: #0d1117;
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .history-view-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .history-view-label {
+      margin: 0;
+      font-size: 15px;
+      color: #f0f6fc;
+    }
+    .history-view-caption {
+      font-size: 12px;
+      color: #8b949e;
+      white-space: nowrap;
+    }
+    .history-view img {
+      max-height: clamp(260px, 42vh, 560px);
+      margin-bottom: 10px;
+    }
+    .image-links {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      font-size: 13px;
+    }
+    .image-links a {
+      color: #79c0ff;
+      text-decoration: none;
+    }
+    .image-links a:hover {
+      text-decoration: underline;
+    }
+    @media (max-width: 900px) {
+      body {
+        padding: 12px;
+      }
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+          "temp"
+          "fan"
+          "curve"
+          "log";
+      }
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+      .curve-meta {
+        grid-template-columns: 1fr;
+      }
+      .history-view-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      img {
+        max-height: none;
+      }
+    }
+    pre {
+      margin: 0;
+      padding: 12px;
+      border: 1px solid #21262d;
+      background: #0d1117;
+      color: #c9d1d9;
+      overflow: auto;
+      max-height: clamp(220px, 30vh, 360px);
+      line-height: 1.35;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .dashboard-grid .history-card,
+    .dashboard-grid .log-panel,
+    .dashboard-grid .curve-panel,
+    .dashboard-grid .summary-panel {
+      margin-bottom: 0;
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <h1>iDRAC Temp/Fan Monitoring</h1>
+
+    <section class="dashboard-grid">
+      <section class="history-section temperature-section">
+        <section class="history-card" data-history-panel data-kind="temp" data-default-range="daily">
+          <h2>Temperature History</h2>
+          <div class="history-tabs" role="tablist" aria-label="Temperature history ranges">
+            <button class="history-tab is-active" type="button" data-range="daily" role="tab" aria-selected="true">Daily</button>
+            <button class="history-tab" type="button" data-range="weekly" role="tab" aria-selected="false">Weekly</button>
+            <button class="history-tab" type="button" data-range="monthly" role="tab" aria-selected="false">Monthly</button>
+            <button class="history-tab" type="button" data-range="yearly" role="tab" aria-selected="false">Yearly</button>
+          </div>
+          <div class="history-view">
+            <div class="history-view-header">
+              <h3 class="history-view-label" data-history-label>Daily</h3>
+              <span class="history-view-caption">Temperature trend</span>
+            </div>
+            <img src="temps_f_daily.svg" alt="Daily temperature graph" data-history-image>
+            <div class="image-links">
+              <a href="temps_f_daily.svg" target="_blank" rel="noopener" data-history-link>Open Daily SVG</a>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <aside class="side-column">
+        <section class="summary-panel" id="temp-summary-panel">
+          <h2>24-Hour Temperature Summary</h2>
+          <p>Loading temperature summary...</p>
+        </section>
+
+        <section class="alert-panel">
+          <h2>Email Settings</h2>
+          <section class="alert-status-panel" id="alert-status-panel">
+            <p>Loading email settings...</p>
+          </section>
+        </section>
+
+        <section class="curve-panel">
+          <h2>Fan Curve Settings</h2>
+          <p>Loading fan curve settings...</p>
+        </section>
+      </aside>
+
+      <section class="history-section fan-section">
+        <section class="history-card" data-history-panel data-kind="fan" data-default-range="daily">
+          <h2>Fan Speed History</h2>
+          <div class="history-tabs" role="tablist" aria-label="Fan speed history ranges">
+            <button class="history-tab is-active" type="button" data-range="daily" role="tab" aria-selected="true">Daily</button>
+            <button class="history-tab" type="button" data-range="weekly" role="tab" aria-selected="false">Weekly</button>
+            <button class="history-tab" type="button" data-range="monthly" role="tab" aria-selected="false">Monthly</button>
+            <button class="history-tab" type="button" data-range="yearly" role="tab" aria-selected="false">Yearly</button>
+          </div>
+          <div class="history-view">
+            <div class="history-view-header">
+              <h3 class="history-view-label" data-history-label>Daily</h3>
+              <span class="history-view-caption">Fan RPM trend</span>
+            </div>
+            <img src="fans_rpm_daily.svg" alt="Daily fan speed graph" data-history-image>
+            <div class="image-links">
+              <a href="fans_rpm_daily.svg" target="_blank" rel="noopener" data-history-link>Open Daily SVG</a>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section class="log-panel">
+        <h2>Fan Control Log</h2>
+        <pre id="fancontrol-log">Loading fancontrol.log...</pre>
+      </section>
+    </section>
+  </main>
+  <script>
+    const HISTORY_RANGE_LABELS = {
+      daily: 'Daily',
+      weekly: 'Weekly',
+      monthly: 'Monthly',
+      yearly: 'Yearly',
+    };
+
+    const HISTORY_KIND_CONFIG = {
+      temp: {
+        prefix: 'temps_f',
+        noun: 'temperature graph',
+      },
+      fan: {
+        prefix: 'fans_rpm',
+        noun: 'fan speed graph',
+      },
+    };
+
+    function setHistoryTab(panelEl, range) {
+      const kind = panelEl.dataset.kind;
+      const config = HISTORY_KIND_CONFIG[kind];
+      const label = HISTORY_RANGE_LABELS[range];
+      if (!config || !label) {
+        return;
+      }
+
+      const imgEl = panelEl.querySelector('[data-history-image]');
+      const labelEl = panelEl.querySelector('[data-history-label]');
+      const linkEl = panelEl.querySelector('[data-history-link]');
+      const fileName = `${config.prefix}_${range}.svg`;
+
+      labelEl.textContent = label;
+      imgEl.src = fileName;
+      imgEl.alt = `${label} ${config.noun}`;
+      linkEl.href = fileName;
+      linkEl.textContent = `Open ${label} SVG`;
+
+      panelEl.querySelectorAll('.history-tab').forEach((buttonEl) => {
+        const isActive = buttonEl.dataset.range === range;
+        buttonEl.classList.toggle('is-active', isActive);
+        buttonEl.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
+    }
+
+    function initHistoryTabs() {
+      document.querySelectorAll('[data-history-panel]').forEach((panelEl) => {
+        const defaultRange = panelEl.dataset.defaultRange || 'daily';
+        panelEl.querySelectorAll('.history-tab').forEach((buttonEl) => {
+          buttonEl.addEventListener('click', () => setHistoryTab(panelEl, buttonEl.dataset.range));
+        });
+        setHistoryTab(panelEl, defaultRange);
+      });
+    }
+
+    function splitFancontrolEntries(text) {
+      const lines = text.replace(/\r/g, '').split('\n');
+      const entries = [];
+      let current = [];
+
+      for (const line of lines) {
+        if (line.startsWith('[fancontrol]') && line.includes(' running PowerEdge-shutup/fancontrol.sh')) {
+          if (current.length) {
+            entries.push(current.join('\n').trimEnd());
+          }
+          current = [line];
+          continue;
+        }
+
+        if (!current.length && !line.trim()) {
+          continue;
+        }
+
+        current.push(line);
+      }
+
+      if (current.length) {
+        entries.push(current.join('\n').trimEnd());
+      }
+
+      return entries.filter((entry) => entry.trim().length > 0);
+    }
+
+    function newestEntriesFirst(entries, maxLines) {
+      const selected = [];
+      let lineCount = 0;
+
+      for (let i = entries.length - 1; i >= 0; i -= 1) {
+        const entry = entries[i];
+        const entryLines = entry.split('\n').length;
+        if (selected.length && lineCount + entryLines > maxLines) {
+          break;
+        }
+        selected.push(entry);
+        lineCount += entryLines;
+      }
+
+      return selected;
+    }
+
+    async function loadFancontrolLog() {
+      const logEl = document.getElementById('fancontrol-log');
+      try {
+        const response = await fetch(`fancontrol.log?t=${Date.now()}`, { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const text = await response.text();
+        const entries = splitFancontrolEntries(text.trimEnd());
+        const latestEntries = newestEntriesFirst(entries, 60);
+        logEl.textContent = latestEntries.join('\n\n') || 'fancontrol.log is empty.';
+        logEl.scrollTop = 0;
+      } catch (err) {
+        logEl.textContent = `Unable to load fancontrol.log: ${err.message}`;
+      }
+    }
+
+    async function loadFanCurvePanel() {
+      const panelEl = document.querySelector('.curve-panel');
+      try {
+        const response = await fetch(`fan_curve_panel.html?t=${Date.now()}`, { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        panelEl.innerHTML = await response.text();
+      } catch (err) {
+        panelEl.innerHTML = `
+          <h2>Fan Curve Settings</h2>
+          <p>Unable to load fan curve settings: ${err.message}</p>
+        `;
+      }
+    }
+
+    async function loadTempSummaryPanel() {
+      const panelEl = document.getElementById('temp-summary-panel');
+      try {
+        const response = await fetch(`temp_summary_panel.html?t=${Date.now()}`, { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        panelEl.innerHTML = await response.text();
+      } catch (err) {
+        panelEl.innerHTML = `
+          <h2>24-Hour Temperature Summary</h2>
+          <p>Unable to load the temperature summary: ${err.message}</p>
+        `;
+      }
+    }
+
+    async function loadAlertStatusPanel() {
+      const panelEl = document.getElementById('alert-status-panel');
+      try {
+        const response = await fetch(`alert_status_panel.html?t=${Date.now()}`, { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        panelEl.innerHTML = await response.text();
+      } catch (err) {
+        panelEl.innerHTML = `<p>Unable to load email alert status: ${err.message}</p>`;
+      }
+    }
+
+    initHistoryTabs();
+    loadAlertStatusPanel();
+    loadTempSummaryPanel();
+    loadFanCurvePanel();
+    loadFancontrolLog();
+    setInterval(loadFancontrolLog, 15000);
+    setInterval(loadTempSummaryPanel, 15000);
+  </script>
+</body>
+</html>
