@@ -1,6 +1,6 @@
-# delltemps
+# iDRAC Temp/Fan Monitoring
 
-Containerized iDRAC temperature and fan monitoring with a local dashboard, email alerts, and optional PowerEdge fan control integration.
+Containerized iDRAC temperature and fan monitoring with a local dashboard, email alerts, and optional PowerEdge fan control integration based on https://github.com/White-Raven/PowerEdge-shutup
 
 ## What It Does
 
