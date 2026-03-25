@@ -24,6 +24,49 @@
       margin: 0 0 16px;
       font-size: 24px;
     }
+    .host-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+      margin: 0 0 10px;
+    }
+    .host-toolbar-label {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #8b949e;
+    }
+    .host-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .host-button {
+      border: 1px solid #30363d;
+      background: #11161d;
+      color: #c9d1d9;
+      border-radius: 999px;
+      padding: 8px 14px;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+    .host-button:hover {
+      border-color: #58a6ff;
+      color: #f0f6fc;
+    }
+    .host-button.is-active {
+      background: #238636;
+      border-color: #238636;
+      color: #ffffff;
+    }
+    .host-subtitle {
+      margin: 0 0 20px;
+      font-size: 13px;
+      color: #8b949e;
+    }
     h2 {
       margin: 0 0 10px;
       font-size: 16px;
@@ -338,6 +381,13 @@
 <body>
   <main class="page">
     <h1>iDRAC Temp/Fan Monitoring</h1>
+    <section class="host-toolbar">
+      <span class="host-toolbar-label">Viewing Host</span>
+      <div class="host-buttons" id="host-buttons">
+        <span class="host-subtitle">Loading hosts...</span>
+      </div>
+    </section>
+    <p class="host-subtitle" id="host-subtitle">Preparing host dashboards...</p>
 
     <section class="dashboard-grid">
       <section class="history-section temperature-section">
@@ -354,9 +404,9 @@
               <h3 class="history-view-label" data-history-label>Daily</h3>
               <span class="history-view-caption">Temperature trend</span>
             </div>
-            <img src="temps_f_daily.svg" alt="Daily temperature graph" data-history-image>
+            <img alt="Temperature graph" data-history-image>
             <div class="image-links">
-              <a href="temps_f_daily.svg" target="_blank" rel="noopener" data-history-link>Open Daily SVG</a>
+              <a href="#" target="_blank" rel="noopener" data-history-link>Open Daily SVG</a>
             </div>
           </div>
         </section>
@@ -395,9 +445,9 @@
               <h3 class="history-view-label" data-history-label>Daily</h3>
               <span class="history-view-caption">Fan RPM trend</span>
             </div>
-            <img src="fans_rpm_daily.svg" alt="Daily fan speed graph" data-history-image>
+            <img alt="Fan speed graph" data-history-image>
             <div class="image-links">
-              <a href="fans_rpm_daily.svg" target="_blank" rel="noopener" data-history-link>Open Daily SVG</a>
+              <a href="#" target="_blank" rel="noopener" data-history-link>Open Daily SVG</a>
             </div>
           </div>
         </section>
@@ -410,6 +460,11 @@
     </section>
   </main>
   <script>
+    const hostState = {
+      hosts: [],
+      selectedSlug: '',
+    };
+
     const HISTORY_RANGE_LABELS = {
       daily: 'Daily',
       weekly: 'Weekly',
@@ -428,6 +483,98 @@
       },
     };
 
+    function normalizeHosts(rawHosts) {
+      return rawHosts.map((entry) => {
+        const slug = entry.slug || '';
+        return {
+          host: entry.host || slug || 'Current Host',
+          slug,
+          basePath: slug ? `hosts/${slug}` : '',
+        };
+      });
+    }
+
+    function getFallbackHosts() {
+      return [{ host: 'Current Host', slug: '', basePath: '' }];
+    }
+
+    function getActiveHost() {
+      return hostState.hosts.find((entry) => entry.slug === hostState.selectedSlug) || hostState.hosts[0] || getFallbackHosts()[0];
+    }
+
+    function hostAssetPath(fileName) {
+      const activeHost = getActiveHost();
+      return activeHost.basePath ? `${activeHost.basePath}/${fileName}` : fileName;
+    }
+
+    function renderHostButtons() {
+      const buttonsEl = document.getElementById('host-buttons');
+      buttonsEl.innerHTML = '';
+
+      hostState.hosts.forEach((entry) => {
+        const buttonEl = document.createElement('button');
+        buttonEl.type = 'button';
+        buttonEl.className = 'host-button';
+        buttonEl.textContent = entry.host;
+        buttonEl.addEventListener('click', () => setSelectedHost(entry.slug));
+        if (entry.slug === hostState.selectedSlug) {
+          buttonEl.classList.add('is-active');
+        }
+        buttonsEl.appendChild(buttonEl);
+      });
+    }
+
+    function updateHostSubtitle() {
+      const subtitleEl = document.getElementById('host-subtitle');
+      const activeHost = getActiveHost();
+      subtitleEl.textContent = `Showing metrics for ${activeHost.host}`;
+    }
+
+    function refreshHistoryPanels() {
+      document.querySelectorAll('[data-history-panel]').forEach((panelEl) => {
+        const activeRange = panelEl.dataset.activeRange || panelEl.dataset.defaultRange || 'daily';
+        setHistoryTab(panelEl, activeRange);
+      });
+    }
+
+    function setSelectedHost(slug, updateUrl = true) {
+      hostState.selectedSlug = slug;
+      renderHostButtons();
+      updateHostSubtitle();
+      refreshHistoryPanels();
+      loadTempSummaryPanel();
+      loadFancontrolLog();
+
+      if (updateUrl) {
+        const url = new URL(window.location.href);
+        if (slug) {
+          url.searchParams.set('host', slug);
+        } else {
+          url.searchParams.delete('host');
+        }
+        window.history.replaceState({}, '', url);
+      }
+    }
+
+    async function loadHostsManifest() {
+      try {
+        const response = await fetch(`hosts.json?t=${Date.now()}`, { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const manifest = await response.json();
+        const hosts = normalizeHosts(Array.isArray(manifest) ? manifest : []);
+        hostState.hosts = hosts.length ? hosts : getFallbackHosts();
+      } catch (err) {
+        hostState.hosts = getFallbackHosts();
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      const requestedSlug = params.get('host') || '';
+      const selected = hostState.hosts.find((entry) => entry.slug === requestedSlug) || hostState.hosts[0];
+      setSelectedHost(selected.slug, false);
+    }
+
     function setHistoryTab(panelEl, range) {
       const kind = panelEl.dataset.kind;
       const config = HISTORY_KIND_CONFIG[kind];
@@ -439,8 +586,9 @@
       const imgEl = panelEl.querySelector('[data-history-image]');
       const labelEl = panelEl.querySelector('[data-history-label]');
       const linkEl = panelEl.querySelector('[data-history-link]');
-      const fileName = `${config.prefix}_${range}.svg`;
+      const fileName = hostAssetPath(`${config.prefix}_${range}.svg`);
 
+      panelEl.dataset.activeRange = range;
       labelEl.textContent = label;
       imgEl.src = fileName;
       imgEl.alt = `${label} ${config.noun}`;
@@ -512,7 +660,7 @@
     async function loadFancontrolLog() {
       const logEl = document.getElementById('fancontrol-log');
       try {
-        const response = await fetch(`fancontrol.log?t=${Date.now()}`, { cache: 'no-store' });
+        const response = await fetch(`${hostAssetPath('fancontrol.log')}?t=${Date.now()}`, { cache: 'no-store' });
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
@@ -545,7 +693,7 @@
     async function loadTempSummaryPanel() {
       const panelEl = document.getElementById('temp-summary-panel');
       try {
-        const response = await fetch(`temp_summary_panel.html?t=${Date.now()}`, { cache: 'no-store' });
+        const response = await fetch(`${hostAssetPath('temp_summary_panel.html')}?t=${Date.now()}`, { cache: 'no-store' });
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
@@ -573,9 +721,8 @@
 
     initHistoryTabs();
     loadAlertStatusPanel();
-    loadTempSummaryPanel();
     loadFanCurvePanel();
-    loadFancontrolLog();
+    loadHostsManifest();
     setInterval(loadFancontrolLog, 15000);
     setInterval(loadTempSummaryPanel, 15000);
   </script>

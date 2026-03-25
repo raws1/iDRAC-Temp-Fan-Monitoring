@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-required_vars="IDRAC_HOST IDRAC_USER IDRAC_PASSWORD"
+required_vars="IDRAC_USER IDRAC_PASSWORD"
 for var in $required_vars; do
   eval "value=\${$var:-}"
   if [ -z "$value" ]; then
@@ -9,6 +9,12 @@ for var in $required_vars; do
     exit 1
   fi
 done
+
+HOSTS_RAW="${IDRAC_HOSTS:-${IDRAC_HOST:-}}"
+if [ -z "$HOSTS_RAW" ]; then
+  echo "Missing required environment variable: IDRAC_HOSTS or IDRAC_HOST" >&2
+  exit 1
+fi
 
 OUTPUT_DIR="${OUTPUT_DIR:-/data}"
 HTTP_BIND="${HTTP_BIND:-0.0.0.0}"
@@ -20,29 +26,64 @@ ENABLE_POWEREDGE_SHUTUP="${ENABLE_POWEREDGE_SHUTUP:-1}"
 FANCONTROL_INTERVAL_SECONDS="${FANCONTROL_INTERVAL_SECONDS:-$CHECK_INTERVAL_SECONDS}"
 export CHECK_INTERVAL_SECONDS INTERVAL_SECONDS FANCONTROL_INTERVAL_SECONDS
 
+slugify_host() {
+  printf '%s' "$1" | tr -cs 'A-Za-z0-9._-' '-'
+}
+
+HOSTS_LIST="$(printf '%s' "$HOSTS_RAW" | tr ',\n' '  ' | xargs)"
+if [ -z "$HOSTS_LIST" ]; then
+  echo "No valid hosts found in IDRAC_HOSTS/IDRAC_HOST" >&2
+  exit 1
+fi
+
 mkdir -p "$OUTPUT_DIR"
+mkdir -p "$OUTPUT_DIR/hosts"
+
+hosts_manifest_tmp="$OUTPUT_DIR/hosts.json.tmp"
+printf '[' > "$hosts_manifest_tmp"
+first_host=1
+for host in $HOSTS_LIST; do
+  host_slug="$(slugify_host "$host")"
+  if [ "$first_host" -eq 1 ]; then
+    first_host=0
+  else
+    printf ',' >> "$hosts_manifest_tmp"
+  fi
+  printf '\n  {"host":"%s","slug":"%s"}' "$host" "$host_slug" >> "$hosts_manifest_tmp"
+done
+printf '\n]\n' >> "$hosts_manifest_tmp"
+mv "$hosts_manifest_tmp" "$OUTPUT_DIR/hosts.json"
+
 python3 /app/generate_fan_curve_panel.py \
   --source /app/PowerEdge-shutup/fancontrol.sh \
   --output "$OUTPUT_DIR/fan_curve_panel.html" \
   --alert-output "$OUTPUT_DIR/alert_status_panel.html"
 cp /app/index.html "$OUTPUT_DIR/index.html"
 
-python3 -u /app/monitor_idrac_temps_f.py \
-  --host "$IDRAC_HOST" \
-  --user "$IDRAC_USER" \
-  --password "$IDRAC_PASSWORD" \
-  --interval-seconds "$INTERVAL_SECONDS" \
-  --duration-seconds "$DURATION_SECONDS" \
-  --out-dir "$OUTPUT_DIR" &
+pids=""
+for host in $HOSTS_LIST; do
+  host_slug="$(slugify_host "$host")"
+  host_dir="$OUTPUT_DIR/hosts/$host_slug"
+  mkdir -p "$host_dir"
 
-monitor_pid="$!"
-pids="$monitor_pid"
+  python3 -u /app/monitor_idrac_temps_f.py \
+    --host "$host" \
+    --user "$IDRAC_USER" \
+    --password "$IDRAC_PASSWORD" \
+    --interval-seconds "$INTERVAL_SECONDS" \
+    --duration-seconds "$DURATION_SECONDS" \
+    --out-dir "$host_dir" &
+  monitor_pid="$!"
+  pids="$pids $monitor_pid"
 
-if [ "$ENABLE_POWEREDGE_SHUTUP" = "1" ]; then
-  /app/fancontrol-loop.sh &
-  fancontrol_pid="$!"
-  pids="$pids $fancontrol_pid"
-fi
+  if [ "$ENABLE_POWEREDGE_SHUTUP" = "1" ]; then
+    POWEREDGE_SHUTUP_IPMIHOST="$host" OUTPUT_DIR="$host_dir" /app/fancontrol-loop.sh &
+    fancontrol_pid="$!"
+    pids="$pids $fancontrol_pid"
+  fi
+done
+
+echo "Monitoring hosts: $HOSTS_LIST"
 
 cleanup() {
   for pid in $pids; do

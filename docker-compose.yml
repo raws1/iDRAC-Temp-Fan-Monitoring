@@ -6,6 +6,7 @@ services:
     container_name: delltemps
     restart: unless-stopped
     environment:
+      IDRAC_HOSTS: "${IDRAC_HOSTS:-}"
       IDRAC_HOST: "${IDRAC_HOST}"
       IDRAC_USER: "${IDRAC_USER}"
       IDRAC_PASSWORD: "${IDRAC_PASSWORD}"

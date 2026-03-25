@@ -17,6 +17,7 @@ The container reads its settings from environment variables. A publish-safe exam
 
 Important settings:
 
+- `IDRAC_HOSTS`
 - `IDRAC_HOST`
 - `IDRAC_USER`
 - `IDRAC_PASSWORD`
@@ -24,7 +25,11 @@ Important settings:
 - `DURATION_SECONDS`
 - `ALERT_EMAIL_ENABLED`
 
+Use `IDRAC_HOSTS` for multiple targets with shared credentials and shared monitoring settings. `IDRAC_HOST` remains available for the single-host case.
+
 `DURATION_SECONDS=0` means run indefinitely.
+
+When multiple hosts are configured, the container launches one monitor per host and the dashboard adds a host selector so you can switch between per-host graphs and logs.
 
 ## Run
 
