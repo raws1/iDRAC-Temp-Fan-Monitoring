@@ -70,6 +70,7 @@ for host in $HOSTS_LIST; do
     --host "$host" \
     --user "$IDRAC_USER" \
     --password "$IDRAC_PASSWORD" \
+    --encryption-key "${IDRAC_ENCRYPTION_KEY:-}" \
     --interval-seconds "$INTERVAL_SECONDS" \
     --duration-seconds "$DURATION_SECONDS" \
     --out-dir "$host_dir" &

@@ -5,6 +5,7 @@ Capture iDRAC temperatures in Fahrenheit plus all fan RPM readings, and redraw l
 Usage:
   python3 monitor_idrac_temps_f.py \
     --host IDRAC_HOST --user IDRAC_USER --password 'IDRAC_PASSWORD' \
+    --encryption-key "$IDRAC_ENCRYPTION_KEY" \
     --interval-seconds 60 --duration-seconds 0 \
     --out-dir /path/to/output
 """
@@ -184,7 +185,7 @@ def natural_key(name: str) -> List[object]:
     return [int(p) if p.isdigit() else p.lower() for p in re.split(r"(\d+)", name)]
 
 
-def run_ipmitool(host: str, user: str, password: str, sensor_type: str) -> str:
+def run_ipmitool(host: str, user: str, password: str, encryption_key: str, sensor_type: str) -> str:
     cmd = [
         "ipmitool",
         "-I",
@@ -195,18 +196,24 @@ def run_ipmitool(host: str, user: str, password: str, sensor_type: str) -> str:
         user,
         "-P",
         password,
-        "sdr",
-        "type",
-        sensor_type,
     ]
+    if encryption_key:
+        cmd.extend(["-y", encryption_key])
+    cmd.extend(
+        [
+            "sdr",
+            "type",
+            sensor_type,
+        ]
+    )
     proc = subprocess.run(cmd, text=True, capture_output=True)
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.strip() or "ipmitool returned non-zero status")
     return proc.stdout
 
 
-def get_temp_sensor_map(host: str, user: str, password: str) -> Dict[str, int]:
-    out = run_ipmitool(host, user, password, sensor_type="temperature")
+def get_temp_sensor_map(host: str, user: str, password: str, encryption_key: str) -> Dict[str, int]:
+    out = run_ipmitool(host, user, password, encryption_key, sensor_type="temperature")
     temp_map: Dict[str, int] = {}
     for line in out.splitlines():
         m = TEMP_SENSOR_RE.match(line)
@@ -216,8 +223,8 @@ def get_temp_sensor_map(host: str, user: str, password: str) -> Dict[str, int]:
     return temp_map
 
 
-def get_fan_sensor_map(host: str, user: str, password: str) -> Dict[str, int]:
-    out = run_ipmitool(host, user, password, sensor_type="fan")
+def get_fan_sensor_map(host: str, user: str, password: str, encryption_key: str) -> Dict[str, int]:
+    out = run_ipmitool(host, user, password, encryption_key, sensor_type="fan")
     fan_map: Dict[str, int] = {}
     for line in out.splitlines():
         m = FAN_SENSOR_RE.match(line)
@@ -240,10 +247,11 @@ def get_temp_values_c(
     host: str,
     user: str,
     password: str,
+    encryption_key: str,
     inlet_sensor_name: str,
     cpu1_sensor_name: str,
 ) -> Tuple[int, int]:
-    sensor_map = get_temp_sensor_map(host, user, password)
+    sensor_map = get_temp_sensor_map(host, user, password, encryption_key)
     inlet_c = sensor_map.get(inlet_sensor_name)
     cpu1_c = sensor_map.get(cpu1_sensor_name)
     if inlet_c is None or cpu1_c is None:
@@ -259,9 +267,10 @@ def get_fan_values_rpm(
     host: str,
     user: str,
     password: str,
+    encryption_key: str,
     fan_sensor_names: List[str],
 ) -> Dict[str, int]:
-    sensor_map = get_fan_sensor_map(host, user, password)
+    sensor_map = get_fan_sensor_map(host, user, password, encryption_key)
     values: Dict[str, int] = {}
     missing: List[str] = []
     for name in fan_sensor_names:
@@ -794,6 +803,7 @@ def main() -> int:
     parser.add_argument("--host", required=True)
     parser.add_argument("--user", required=True)
     parser.add_argument("--password", required=True)
+    parser.add_argument("--encryption-key", default=os.environ.get("IDRAC_ENCRYPTION_KEY", ""))
     parser.add_argument("--interval-seconds", type=int, default=300)
     parser.add_argument("--duration-seconds", type=int, default=10800)
     parser.add_argument("--out-dir", required=True)
@@ -832,11 +842,11 @@ def main() -> int:
 
     write_temp_summary_panel(temp_summary_panel_path, [])
 
-    initial_temp_map = get_temp_sensor_map(args.host, args.user, args.password)
+    initial_temp_map = get_temp_sensor_map(args.host, args.user, args.password, args.encryption_key)
     inlet_sensor_name = select_sensor_name(initial_temp_map, PREFERRED_INLET_SENSORS, role="inlet")
     cpu1_sensor_name = select_sensor_name(initial_temp_map, PREFERRED_CPU1_SENSORS, role="cpu1")
 
-    initial_fan_map = get_fan_sensor_map(args.host, args.user, args.password)
+    initial_fan_map = get_fan_sensor_map(args.host, args.user, args.password, args.encryption_key)
     fan_sensor_names = sorted(initial_fan_map.keys(), key=natural_key)
     if not fan_sensor_names:
         raise RuntimeError("No fan sensors found via IPMI")
@@ -882,6 +892,7 @@ def main() -> int:
                 args.host,
                 args.user,
                 args.password,
+                args.encryption_key,
                 inlet_sensor_name=inlet_sensor_name,
                 cpu1_sensor_name=cpu1_sensor_name,
             )
@@ -889,6 +900,7 @@ def main() -> int:
                 args.host,
                 args.user,
                 args.password,
+                args.encryption_key,
                 fan_sensor_names=fan_sensor_names,
             )
 
