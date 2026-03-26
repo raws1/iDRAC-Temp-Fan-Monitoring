@@ -45,3 +45,4 @@ The dashboard is served on port `8580` by default.
 - The `PowerEdge-shutup` directory is vendored in this repository so local fan-curve edits are tracked with the project.
 
 
+<img width="1733" height="1147" alt="image" src="https://github.com/user-attachments/assets/347929c2-d8a3-46aa-ae75-2b56879d5570" />
