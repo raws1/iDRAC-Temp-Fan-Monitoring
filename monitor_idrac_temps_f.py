@@ -185,6 +185,26 @@ def natural_key(name: str) -> List[object]:
     return [int(p) if p.isdigit() else p.lower() for p in re.split(r"(\d+)", name)]
 
 
+def estimate_monospace_text_width_px(text: str, font_size: int = 12) -> int:
+    return math.ceil(len(text) * font_size * 0.62)
+
+
+def chart_left_padding(y_labels: List[str], minimum: int = 70) -> int:
+    if not y_labels:
+        return minimum
+    return max(minimum, max(estimate_monospace_text_width_px(label) for label in y_labels) + 18)
+
+
+def x_tick_anchor(idx: int, total_ticks: int) -> str:
+    if total_ticks <= 1:
+        return "middle"
+    if idx == 0:
+        return "start"
+    if idx == total_ticks - 1:
+        return "end"
+    return "middle"
+
+
 def run_ipmitool(host: str, user: str, password: str, encryption_key: str, sensor_type: str) -> str:
     cmd = [
         "ipmitool",
@@ -485,12 +505,9 @@ def write_temp_summary_panel(panel_path: Path, samples: List[TempSample]) -> Non
 def render_temp_svg(samples: List[TempSample], svg_path: Path, title: str, span_seconds: float) -> None:
     width = 1100
     height = 560
-    left = 70
     right = 20
     top = 50
     bottom = 90
-    plot_w = width - left - right
-    plot_h = height - top - bottom
 
     if not samples:
         _write_no_data_svg(svg_path, "No temperature data yet")
@@ -514,6 +531,12 @@ def render_temp_svg(samples: List[TempSample], svg_path: Path, title: str, span_
         y_min -= 5
         y_max += 5
 
+    y_grid_vals = [y_min + i * (y_max - y_min) / 8.0 for i in range(9)]
+    y_labels = [f"{yv:.1f}F" for yv in y_grid_vals]
+    left = chart_left_padding(y_labels, minimum=70)
+    plot_w = width - left - right
+    plot_h = height - top - bottom
+
     def x_px(v: float) -> float:
         return _map(v, x_min, x_max, left, left + plot_w)
 
@@ -522,7 +545,6 @@ def render_temp_svg(samples: List[TempSample], svg_path: Path, title: str, span_
 
     inlet_pts = " ".join(f"{x_px(s.ts_epoch):.2f},{y_px(s.inlet_f):.2f}" for s in samples)
     cpu_pts = " ".join(f"{x_px(s.ts_epoch):.2f},{y_px(s.cpu1_f):.2f}" for s in samples)
-    y_grid_vals = [y_min + i * (y_max - y_min) / 8.0 for i in range(9)]
 
     x_tick_count = min(8, len(samples))
     x_tick_indices = [
@@ -570,7 +592,7 @@ def render_temp_svg(samples: List[TempSample], svg_path: Path, title: str, span_
             f"{yv:.1f}F</text>"
         )
 
-    for idx in x_tick_indices:
+    for tick_pos, idx in enumerate(x_tick_indices):
         s = samples[idx]
         xp = x_px(s.ts_epoch)
         lines.append(
@@ -578,8 +600,9 @@ def render_temp_svg(samples: List[TempSample], svg_path: Path, title: str, span_
             "stroke='#30363d' stroke-width='1'/>"
         )
         label = format_axis_timestamp_for_span(s.ts_epoch, span_seconds)
+        anchor = x_tick_anchor(tick_pos, len(x_tick_indices))
         lines.append(
-            f"<text x='{xp:.2f}' y='{top + plot_h + 24}' text-anchor='middle' fill='#8b949e' "
+            f"<text x='{xp:.2f}' y='{top + plot_h + 24}' text-anchor='{anchor}' fill='#8b949e' "
             f"font-size='12' font-family='Menlo, Monaco, monospace'>{label}</text>"
         )
 
@@ -628,12 +651,9 @@ def render_fan_svg(
 ) -> None:
     width = 1100
     height = 620
-    left = 70
     right = 20
     top = 50
     bottom = 105
-    plot_w = width - left - right
-    plot_h = height - top - bottom
 
     if not samples or not fan_sensor_names:
         _write_no_data_svg(svg_path, "No fan data yet")
@@ -654,6 +674,12 @@ def render_fan_svg(
     if y_min == y_max:
         y_max += 200.0
 
+    y_grid_vals = [y_min + i * (y_max - y_min) / 8.0 for i in range(9)]
+    y_labels = [f"{yv:.0f} RPM" for yv in y_grid_vals]
+    left = chart_left_padding(y_labels, minimum=70)
+    plot_w = width - left - right
+    plot_h = height - top - bottom
+
     def x_px(v: float) -> float:
         return _map(v, x_min, x_max, left, left + plot_w)
 
@@ -661,7 +687,6 @@ def render_fan_svg(
         return _map(v, y_min, y_max, top + plot_h, top)
 
     palette = ["#58a6ff", "#ff7b72", "#3fb950", "#d2a8ff", "#f2cc60", "#79c0ff", "#ffa657", "#a5d6ff"]
-    y_grid_vals = [y_min + i * (y_max - y_min) / 8.0 for i in range(9)]
 
     x_tick_count = min(8, len(samples))
     x_tick_indices = [
@@ -709,7 +734,7 @@ def render_fan_svg(
             f"{yv:.0f} RPM</text>"
         )
 
-    for idx in x_tick_indices:
+    for tick_pos, idx in enumerate(x_tick_indices):
         s = samples[idx]
         xp = x_px(s.ts_epoch)
         lines.append(
@@ -717,8 +742,9 @@ def render_fan_svg(
             "stroke='#30363d' stroke-width='1'/>"
         )
         label = format_axis_timestamp_for_span(s.ts_epoch, span_seconds)
+        anchor = x_tick_anchor(tick_pos, len(x_tick_indices))
         lines.append(
-            f"<text x='{xp:.2f}' y='{top + plot_h + 24}' text-anchor='middle' fill='#8b949e' "
+            f"<text x='{xp:.2f}' y='{top + plot_h + 24}' text-anchor='{anchor}' fill='#8b949e' "
             f"font-size='12' font-family='Menlo, Monaco, monospace'>{label}</text>"
         )
 

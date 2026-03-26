@@ -464,6 +464,7 @@
       hosts: [],
       selectedSlug: '',
     };
+    const HOST_STORAGE_KEY = 'delltemps:selected-host';
 
     const HISTORY_RANGE_LABELS = {
       daily: 'Daily',
@@ -496,6 +497,26 @@
 
     function getFallbackHosts() {
       return [{ host: 'Current Host', slug: '', basePath: '' }];
+    }
+
+    function getStoredHostSlug() {
+      try {
+        return window.localStorage.getItem(HOST_STORAGE_KEY) || '';
+      } catch (err) {
+        return '';
+      }
+    }
+
+    function setStoredHostSlug(slug) {
+      try {
+        if (slug) {
+          window.localStorage.setItem(HOST_STORAGE_KEY, slug);
+        } else {
+          window.localStorage.removeItem(HOST_STORAGE_KEY);
+        }
+      } catch (err) {
+        // Ignore storage failures and keep the dashboard usable.
+      }
     }
 
     function getActiveHost() {
@@ -539,6 +560,7 @@
 
     function setSelectedHost(slug, updateUrl = true) {
       hostState.selectedSlug = slug;
+      setStoredHostSlug(slug);
       renderHostButtons();
       updateHostSubtitle();
       refreshHistoryPanels();
@@ -570,7 +592,7 @@
       }
 
       const params = new URLSearchParams(window.location.search);
-      const requestedSlug = params.get('host') || '';
+      const requestedSlug = params.get('host') || getStoredHostSlug();
       const selected = hostState.hosts.find((entry) => entry.slug === requestedSlug) || hostState.hosts[0];
       setSelectedHost(selected.slug, false);
     }

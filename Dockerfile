@@ -7,9 +7,9 @@ WORKDIR /app
 COPY monitor_idrac_temps_f.py /app/monitor_idrac_temps_f.py
 COPY generate_fan_curve_panel.py /app/generate_fan_curve_panel.py
 COPY PowerEdge-shutup /app/PowerEdge-shutup
-COPY docker/index.html /app/index.html
-COPY docker/entrypoint.sh /app/entrypoint.sh
-COPY docker/fancontrol-loop.sh /app/fancontrol-loop.sh
+COPY config/index.html /app/index.html
+COPY config/entrypoint.sh /app/entrypoint.sh
+COPY config/fancontrol-loop.sh /app/fancontrol-loop.sh
 
 RUN chmod +x /app/entrypoint.sh /app/fancontrol-loop.sh /app/PowerEdge-shutup/fancontrol.sh /app/PowerEdge-shutup/temppull.sh
 
