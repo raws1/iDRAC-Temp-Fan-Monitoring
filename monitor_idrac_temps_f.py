@@ -100,6 +100,10 @@ def format_temp_f(value_f: float) -> str:
     return f"{value_f:.1f} F"
 
 
+def format_rpm(value: float) -> str:
+    return f"{value:.0f} RPM"
+
+
 def parse_bool(raw: str | None, default: bool) -> bool:
     if raw is None:
         return default
@@ -502,6 +506,59 @@ def write_temp_summary_panel(panel_path: Path, samples: List[TempSample]) -> Non
     write_text_atomic(panel_path, build_temp_summary_panel_html(samples) + "\n")
 
 
+def build_fan_summary_panel_html(samples: List[FanSample], fan_sensor_names: List[str]) -> str:
+    window_samples = select_time_window_fan(samples, SUMMARY_WINDOW_SECONDS)
+    if not window_samples or not fan_sensor_names:
+        return (
+            "<h2>24-Hour Fan Summary</h2>"
+            "<p>Waiting for fan samples to build the rolling 24-hour summary.</p>"
+        )
+
+    latest_stamp = display_dt_from_epoch(window_samples[-1].ts_epoch).strftime("%Y-%m-%d %I:%M:%S %p %Z")
+
+    def sensor_block(title: str) -> str:
+        values = [sample.fan_rpm[title] for sample in window_samples if title in sample.fan_rpm]
+        if not values:
+            return ""
+
+        avg_value = sum(values) / len(values)
+        low_value = min(values)
+        high_value = max(values)
+        return (
+            "<section class='sensor-summary'>"
+            f"<h3>{escape(title)}</h3>"
+            "<div class='summary-grid'>"
+            "<div class='metric'>"
+            "<span class='metric-label'>24h Average</span>"
+            f"<span class='metric-value'>{escape(format_rpm(avg_value))}</span>"
+            "</div>"
+            "<div class='metric'>"
+            "<span class='metric-label'>Lowest</span>"
+            f"<span class='metric-value'>{escape(format_rpm(low_value))}</span>"
+            "</div>"
+            "<div class='metric'>"
+            "<span class='metric-label'>Highest</span>"
+            f"<span class='metric-value'>{escape(format_rpm(high_value))}</span>"
+            "</div>"
+            "</div>"
+            "</section>"
+        )
+
+    sensor_blocks = "".join(sensor_block(name) for name in fan_sensor_names)
+    return (
+        "<h2>24-Hour Fan Summary</h2>"
+        "<p>Rolling summary from the last 24 hours of captured fan RPM data.</p>"
+        f"<p class='summary-note'>Updated through {escape(latest_stamp)} from {len(window_samples)} samples.</p>"
+        "<div class='summary-sensors'>"
+        f"{sensor_blocks}"
+        "</div>"
+    )
+
+
+def write_fan_summary_panel(panel_path: Path, samples: List[FanSample], fan_sensor_names: List[str]) -> None:
+    write_text_atomic(panel_path, build_fan_summary_panel_html(samples, fan_sensor_names) + "\n")
+
+
 def render_temp_svg(samples: List[TempSample], svg_path: Path, title: str, span_seconds: float) -> None:
     width = 1100
     height = 560
@@ -850,6 +907,7 @@ def main() -> int:
     temp_summary_panel_path = out_dir / "temp_summary_panel.html"
     fan_csv_path = out_dir / "fans_rpm.csv"
     fan_svg_path = out_dir / "fans_rpm_live.svg"
+    fan_summary_panel_path = out_dir / "fan_summary_panel.html"
     status_path = out_dir / "status.txt"
 
     run_forever = args.duration_seconds == 0
@@ -865,8 +923,10 @@ def main() -> int:
     print(f"Temp Summary Panel: {temp_summary_panel_path}")
     print(f"Fan CSV: {fan_csv_path}")
     print(f"Fan Graph (daily/live): {fan_svg_path}")
+    print(f"Fan Summary Panel: {fan_summary_panel_path}")
 
     write_temp_summary_panel(temp_summary_panel_path, [])
+    write_fan_summary_panel(fan_summary_panel_path, [], [])
 
     initial_temp_map = get_temp_sensor_map(args.host, args.user, args.password, args.encryption_key)
     inlet_sensor_name = select_sensor_name(initial_temp_map, PREFERRED_INLET_SENSORS, role="inlet")
@@ -953,6 +1013,7 @@ def main() -> int:
                 now,
             )
             write_temp_summary_panel(temp_summary_panel_path, temp_samples)
+            write_fan_summary_panel(fan_summary_panel_path, fan_samples, fan_sensor_names)
 
             fan_summary = ", ".join(f"{name}={fan_values[name]}RPM" for name in fan_sensor_names)
             status = (

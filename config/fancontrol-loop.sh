@@ -14,7 +14,7 @@ touch "$LOG_FILE"
 
 while :; do
   ts="$(date '+%Y-%m-%d %I:%M:%S %p %Z')"
-  echo "[fancontrol] $ts host=$TARGET_HOST running PowerEdge-shutup/fancontrol.sh" | tee -a "$LOG_FILE"
+  echo "[fancontrol] $ts host=$TARGET_HOST" | tee -a "$LOG_FILE"
   tmp_log="$(mktemp)"
   if bash /app/PowerEdge-shutup/fancontrol.sh >"$tmp_log" 2>&1; then
     cat "$tmp_log" | tee -a "$LOG_FILE"
@@ -22,7 +22,7 @@ while :; do
   else
     cat "$tmp_log" | tee -a "$LOG_FILE"
     rm -f "$tmp_log"
-    echo "[fancontrol] $ts host=$TARGET_HOST fancontrol.sh failed" | tee -a "$LOG_FILE" >&2
+    echo "[fancontrol-error] $ts host=$TARGET_HOST fancontrol.sh failed" | tee -a "$LOG_FILE" >&2
   fi
   sleep "$INTERVAL_SECONDS"
 done

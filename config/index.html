@@ -84,14 +84,18 @@
       display: grid;
       grid-template-columns: minmax(0, 1.65fr) minmax(320px, 0.95fr);
       grid-template-areas:
-        "temp curve"
-        "fan curve"
-        "log log";
+        "left curve";
       gap: 20px;
       align-items: start;
     }
     .dashboard-grid > * {
       min-width: 0;
+    }
+    .history-column {
+      grid-area: left;
+      display: grid;
+      gap: 20px;
+      align-self: start;
     }
     .side-column {
       grid-area: curve;
@@ -102,12 +106,6 @@
     .history-section {
       margin: 0;
     }
-    .temperature-section {
-      grid-area: temp;
-    }
-    .fan-section {
-      grid-area: fan;
-    }
     .history-card {
       margin: 0;
       border: 1px solid #30363d;
@@ -116,7 +114,6 @@
       border-radius: 8px;
     }
     .log-panel {
-      grid-area: log;
       margin: 0;
       border: 1px solid #30363d;
       background: #161b22;
@@ -339,10 +336,8 @@
       .dashboard-grid {
         grid-template-columns: 1fr;
         grid-template-areas:
-          "temp"
-          "fan"
-          "curve"
-          "log";
+          "left"
+          "curve";
       }
       .summary-grid {
         grid-template-columns: 1fr;
@@ -390,25 +385,54 @@
     <p class="host-subtitle" id="host-subtitle">Preparing host dashboards...</p>
 
     <section class="dashboard-grid">
-      <section class="history-section temperature-section">
-        <section class="history-card" data-history-panel data-kind="temp" data-default-range="daily">
-          <h2>Temperature History</h2>
-          <div class="history-tabs" role="tablist" aria-label="Temperature history ranges">
-            <button class="history-tab is-active" type="button" data-range="daily" role="tab" aria-selected="true">Daily</button>
-            <button class="history-tab" type="button" data-range="weekly" role="tab" aria-selected="false">Weekly</button>
-            <button class="history-tab" type="button" data-range="monthly" role="tab" aria-selected="false">Monthly</button>
-            <button class="history-tab" type="button" data-range="yearly" role="tab" aria-selected="false">Yearly</button>
-          </div>
-          <div class="history-view">
-            <div class="history-view-header">
-              <h3 class="history-view-label" data-history-label>Daily</h3>
-              <span class="history-view-caption">Temperature trend</span>
+      <section class="history-column">
+        <section class="history-section">
+          <section class="history-card" data-history-panel data-kind="temp" data-default-range="daily">
+            <h2>Temperature History</h2>
+            <div class="history-tabs" role="tablist" aria-label="Temperature history ranges">
+              <button class="history-tab is-active" type="button" data-range="daily" role="tab" aria-selected="true">Daily</button>
+              <button class="history-tab" type="button" data-range="weekly" role="tab" aria-selected="false">Weekly</button>
+              <button class="history-tab" type="button" data-range="monthly" role="tab" aria-selected="false">Monthly</button>
+              <button class="history-tab" type="button" data-range="yearly" role="tab" aria-selected="false">Yearly</button>
             </div>
-            <img alt="Temperature graph" data-history-image>
-            <div class="image-links">
-              <a href="#" target="_blank" rel="noopener" data-history-link>Open Daily SVG</a>
+            <div class="history-view">
+              <div class="history-view-header">
+                <h3 class="history-view-label" data-history-label>Daily</h3>
+                <span class="history-view-caption">Temperature trend</span>
+              </div>
+              <img alt="Temperature graph" data-history-image>
+              <div class="image-links">
+                <a href="#" target="_blank" rel="noopener" data-history-link>Open Daily SVG</a>
+              </div>
             </div>
-          </div>
+          </section>
+        </section>
+
+        <section class="history-section">
+          <section class="history-card" data-history-panel data-kind="fan" data-default-range="daily">
+            <h2>Fan Speed History</h2>
+            <div class="history-tabs" role="tablist" aria-label="Fan speed history ranges">
+              <button class="history-tab is-active" type="button" data-range="daily" role="tab" aria-selected="true">Daily</button>
+              <button class="history-tab" type="button" data-range="weekly" role="tab" aria-selected="false">Weekly</button>
+              <button class="history-tab" type="button" data-range="monthly" role="tab" aria-selected="false">Monthly</button>
+              <button class="history-tab" type="button" data-range="yearly" role="tab" aria-selected="false">Yearly</button>
+            </div>
+            <div class="history-view">
+              <div class="history-view-header">
+                <h3 class="history-view-label" data-history-label>Daily</h3>
+                <span class="history-view-caption">Fan RPM trend</span>
+              </div>
+              <img alt="Fan speed graph" data-history-image>
+              <div class="image-links">
+                <a href="#" target="_blank" rel="noopener" data-history-link>Open Daily SVG</a>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="log-panel">
+          <h2>Fan Control Log</h2>
+          <pre id="fancontrol-log">Loading fancontrol.log...</pre>
         </section>
       </section>
 
@@ -416,6 +440,11 @@
         <section class="summary-panel" id="temp-summary-panel">
           <h2>24-Hour Temperature Summary</h2>
           <p>Loading temperature summary...</p>
+        </section>
+
+        <section class="summary-panel" id="fan-summary-panel">
+          <h2>24-Hour Fan Summary</h2>
+          <p>Loading fan summary...</p>
         </section>
 
         <section class="alert-panel">
@@ -431,32 +460,6 @@
         </section>
       </aside>
 
-      <section class="history-section fan-section">
-        <section class="history-card" data-history-panel data-kind="fan" data-default-range="daily">
-          <h2>Fan Speed History</h2>
-          <div class="history-tabs" role="tablist" aria-label="Fan speed history ranges">
-            <button class="history-tab is-active" type="button" data-range="daily" role="tab" aria-selected="true">Daily</button>
-            <button class="history-tab" type="button" data-range="weekly" role="tab" aria-selected="false">Weekly</button>
-            <button class="history-tab" type="button" data-range="monthly" role="tab" aria-selected="false">Monthly</button>
-            <button class="history-tab" type="button" data-range="yearly" role="tab" aria-selected="false">Yearly</button>
-          </div>
-          <div class="history-view">
-            <div class="history-view-header">
-              <h3 class="history-view-label" data-history-label>Daily</h3>
-              <span class="history-view-caption">Fan RPM trend</span>
-            </div>
-            <img alt="Fan speed graph" data-history-image>
-            <div class="image-links">
-              <a href="#" target="_blank" rel="noopener" data-history-link>Open Daily SVG</a>
-            </div>
-          </div>
-        </section>
-      </section>
-
-      <section class="log-panel">
-        <h2>Fan Control Log</h2>
-        <pre id="fancontrol-log">Loading fancontrol.log...</pre>
-      </section>
     </section>
   </main>
   <script>
@@ -565,6 +568,7 @@
       updateHostSubtitle();
       refreshHistoryPanels();
       loadTempSummaryPanel();
+      loadFanSummaryPanel();
       loadFancontrolLog();
 
       if (updateUrl) {
@@ -640,7 +644,7 @@
       let current = [];
 
       for (const line of lines) {
-        if (line.startsWith('[fancontrol]') && line.includes(' running PowerEdge-shutup/fancontrol.sh')) {
+        if (line.startsWith('[fancontrol]')) {
           if (current.length) {
             entries.push(current.join('\n').trimEnd());
           }
@@ -728,6 +732,22 @@
       }
     }
 
+    async function loadFanSummaryPanel() {
+      const panelEl = document.getElementById('fan-summary-panel');
+      try {
+        const response = await fetch(`${hostAssetPath('fan_summary_panel.html')}?t=${Date.now()}`, { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        panelEl.innerHTML = await response.text();
+      } catch (err) {
+        panelEl.innerHTML = `
+          <h2>24-Hour Fan Summary</h2>
+          <p>Unable to load the fan summary: ${err.message}</p>
+        `;
+      }
+    }
+
     async function loadAlertStatusPanel() {
       const panelEl = document.getElementById('alert-status-panel');
       try {
@@ -747,6 +767,7 @@
     loadHostsManifest();
     setInterval(loadFancontrolLog, 15000);
     setInterval(loadTempSummaryPanel, 15000);
+    setInterval(loadFanSummaryPanel, 15000);
   </script>
 </body>
 </html>
