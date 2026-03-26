@@ -44,5 +44,5 @@ The dashboard is served on port `8580` by default.
 - Runtime data and captured dashboards are intentionally ignored by Git.
 - The `PowerEdge-shutup` directory is vendored in this repository so local fan-curve edits are tracked with the project.
 
+<img width="2013" height="2036" alt="screencapture-10-140-1-78-8580-2026-03-26-12_08_41" src="https://github.com/user-attachments/assets/74b0d873-4361-434c-8909-587c1d771bde" />
 
-<img width="1733" height="1147" alt="image" src="https://github.com/user-attachments/assets/347929c2-d8a3-46aa-ae75-2b56879d5570" />
