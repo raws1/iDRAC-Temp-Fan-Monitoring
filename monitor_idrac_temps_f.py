@@ -267,6 +267,38 @@ def select_sensor_name(sensor_map: Dict[str, int], preferred_names: Tuple[str, .
     raise RuntimeError(f"Could not locate {role} sensor. Available sensors: {', '.join(sorted(sensor_map.keys()))}")
 
 
+def discover_initial_sensor_config(
+    host: str,
+    user: str,
+    password: str,
+    encryption_key: str,
+    status_path: Path,
+) -> Tuple[str, str, List[str]]:
+    retry_seconds = max(1, int(os.environ.get("INITIAL_SENSOR_DISCOVERY_RETRY_SECONDS", "10")))
+
+    while True:
+        try:
+            initial_temp_map = get_temp_sensor_map(host, user, password, encryption_key)
+            inlet_sensor_name = select_sensor_name(initial_temp_map, PREFERRED_INLET_SENSORS, role="inlet")
+            cpu1_sensor_name = select_sensor_name(initial_temp_map, PREFERRED_CPU1_SENSORS, role="cpu1")
+
+            initial_fan_map = get_fan_sensor_map(host, user, password, encryption_key)
+            fan_sensor_names = sorted(initial_fan_map.keys(), key=natural_key)
+            if not fan_sensor_names:
+                raise RuntimeError("No fan sensors found via IPMI")
+
+            return inlet_sensor_name, cpu1_sensor_name, fan_sensor_names
+        except Exception as exc:
+            ts_text = display_now().strftime("%Y-%m-%d %I:%M:%S %p %Z")
+            message = (
+                f"{ts_text} waiting for stable sensor discovery on {host}: {exc} "
+                f"(retrying in {retry_seconds}s)"
+            )
+            status_path.write_text(message + "\n", encoding="utf-8")
+            print(message, file=sys.stderr)
+            time.sleep(retry_seconds)
+
+
 def get_temp_values_c(
     host: str,
     user: str,
@@ -928,14 +960,13 @@ def main() -> int:
     write_temp_summary_panel(temp_summary_panel_path, [])
     write_fan_summary_panel(fan_summary_panel_path, [], [])
 
-    initial_temp_map = get_temp_sensor_map(args.host, args.user, args.password, args.encryption_key)
-    inlet_sensor_name = select_sensor_name(initial_temp_map, PREFERRED_INLET_SENSORS, role="inlet")
-    cpu1_sensor_name = select_sensor_name(initial_temp_map, PREFERRED_CPU1_SENSORS, role="cpu1")
-
-    initial_fan_map = get_fan_sensor_map(args.host, args.user, args.password, args.encryption_key)
-    fan_sensor_names = sorted(initial_fan_map.keys(), key=natural_key)
-    if not fan_sensor_names:
-        raise RuntimeError("No fan sensors found via IPMI")
+    inlet_sensor_name, cpu1_sensor_name, fan_sensor_names = discover_initial_sensor_config(
+        args.host,
+        args.user,
+        args.password,
+        args.encryption_key,
+        status_path,
+    )
 
     alert_config = load_email_alert_config()
     alert_active = False
