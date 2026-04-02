@@ -44,7 +44,9 @@ def parse_fancontrol(path: Path) -> dict[str, object]:
     scalar: dict[str, str] = {}
 
     for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
+        line = raw_line.rstrip()
+        if raw_line[:1].isspace():
+            continue
         if not line or line.startswith("#"):
             continue
 
@@ -112,6 +114,15 @@ def failsafe_label(raw_value: str | None) -> str:
     return f"{value}%"
 
 
+def numeric_failsafe_floor(raw_value: str | None) -> int | None:
+    if raw_value is None:
+        return None
+    value = raw_value.strip()
+    if not value or value.lower() == "auto":
+        return None
+    return int(value)
+
+
 def build_panel_html(config: dict[str, object]) -> str:
     cpu_steps: dict[int, int] = config["cpu_steps"]  # type: ignore[assignment]
     cpu_speeds: dict[int, int] = config["cpu_speeds"]  # type: ignore[assignment]
@@ -149,13 +160,17 @@ def build_panel_html(config: dict[str, object]) -> str:
         "</tr>"
     )
 
+    failsafe_floor = numeric_failsafe_floor(scalar.get("E_value"))
     ambient_rows: list[str] = []
     for index in ambient_indexes:
+        effective_ambient_speed = ambient_speeds[index]
+        if failsafe_floor is not None:
+            effective_ambient_speed = max(effective_ambient_speed, failsafe_floor)
         ambient_rows.append(
             "<tr>"
             f"<td>{html.escape(format_temp_f(ambient_steps[index]))} or lower</td>"
             f"<td>{html.escape(format_temp_f(ambient_mods[index], delta=True, signed=True))}</td>"
-            f"<td>{ambient_speeds[index]}%</td>"
+            f"<td>{effective_ambient_speed}%</td>"
             "</tr>"
         )
 

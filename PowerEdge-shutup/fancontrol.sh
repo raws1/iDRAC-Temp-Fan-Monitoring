@@ -45,8 +45,8 @@ for required_var in IPMIHOST IPMIUSER IPMIPW; do
 done
 
 #Failsafe mode
-#(Possible values being a number between 80 and 100, or "auto")
-E_value="${POWEREDGE_SHUTUP_FAILSAFE:-auto}"
+#(Possible values being a number between 0 and 100, or "auto")
+E_value="${POWEREDGE_SHUTUP_FAILSAFE:-25}"
 
 #IPMI IDs
 #/!\ IMPORTANT - the "0Eh"(CPU0),"0Fh"(CPU1), "04h"(inlet) and "01h"(exhaust) values are the proper ones for MY R720, maybe not for your server. 
@@ -117,22 +117,23 @@ CPUdelta=15
 #If Ambient temp is above $AMBTEMP_MAX, which is step 4, a temp modifier of 69 should be well enough to make the script select auto-fan mode.
 #AMBTEMP_STEPX_noCPU_Fanspeed : Some servers don't report their CPU temps. In that case Fan speed can only be adjusted using Ambient temperature.
 #In case of lack of CPU temps in IPMI, Fan speed values are to be defined here as for each step in the AMBTEMP_noCPU_FS_STEP# value, in % between 0 and 100.
+#Keep this curve conservative: missing CPU telemetry should bias toward safe cooling, not silence.
 
 AMBTEMP_STEP0=20
 AMBTEMP_MOD_STEP0=0
-AMBTEMP_noCPU_FS_STEP0=8
+AMBTEMP_noCPU_FS_STEP0=20
 
 AMBTEMP_STEP1=21
 AMBTEMP_MOD_STEP1=10
-AMBTEMP_noCPU_FS_STEP1=15
+AMBTEMP_noCPU_FS_STEP1=25
 
 AMBTEMP_STEP2=24
 AMBTEMP_MOD_STEP2=15
-AMBTEMP_noCPU_FS_STEP2=20
+AMBTEMP_noCPU_FS_STEP2=30
 
 AMBTEMP_STEP3=26
 AMBTEMP_MOD_STEP3=20
-AMBTEMP_noCPU_FS_STEP3=30
+AMBTEMP_noCPU_FS_STEP3=40
 
 MAX_MOD=69
 
@@ -145,7 +146,8 @@ EXHTEMP_MAX=65
 #To set the Deltatemp and fan speeds for each, use the parameters for the CPU fan mode profile.
 #By default, for safety, the temperature is divided by 3, so for the default first step, 30°C of CPU temp, the delta value is 10°C.
 #To modify the ratio, modify the value DeltaR. Default is 3, no ratio is 1.
-AMBDeltaMode="${POWEREDGE_SHUTUP_AMBDELTAMODE:-true}"
+# Default delta mode off unless a host is known to expose a reliable exhaust sensor.
+AMBDeltaMode="${POWEREDGE_SHUTUP_AMBDELTAMODE:-false}"
 DeltaR=3
 #If in delta mode, ambient temp would warrant an higher fan speed according to the ambient profile, it will use ambient profile's
 #recommendation as to protect your hardware from running with a low delta but with an overall too high temperature.
@@ -205,6 +207,16 @@ function format_setfanspeed_check_f () {
         printf '%s x %s' "${BASH_REMATCH[1]}" "$(format_temp_f delta "${BASH_REMATCH[2]}")"
     else
         printf '%s' "$raw"
+    fi
+}
+
+function apply_failsafe_floor () {
+    local requested_fs="$1"
+
+    if [[ "$requested_fs" =~ ^[0-9]+$ ]] && [[ "$E_value" =~ ^[0-9]+$ ]] && [ "$requested_fs" -lt "$E_value" ]; then
+        printf '%s' "$E_value"
+    else
+        printf '%s' "$requested_fs"
     fi
 }
 
@@ -295,8 +307,8 @@ else
         setfanspeed XX XX "$E_value" 1
 fi
 if [[ "$E_value" =~ $ren ]]; then
-        if [ "$E_value" -lt 80 ]; then
-                echo "E_value parameter invalid, can't be negative or lower than 80"
+        if [ "$E_value" -lt 0 ]; then
+                echo "E_value parameter invalid, can't be negative"
                 E_value="auto"
         fi
         if [ "$E_value" -gt 100 ]; then
@@ -698,7 +710,7 @@ if [ $Logtype -eq 2 ]; then
                  echo "CPU$i = $(format_temp_f absolute "${!CPUtemploopecho}")"
             fi
          done
-        [ "$CPUcount" -eq 0 ] && echo "No CPU sensors = Ambient Mode"
+        [ "$CPUcount" -eq 0 ] && echo "No CPU sensors = Ambient Safety Mode"
         [ "$TEMPgov" -eq 0 ] && [ "$CPUcount" -gt 1 ] && echo "$CPUcount CPU average = $(format_temp_f absolute "$CPUn")"
         [ "$TEMPgov" -eq 1 ] && [ "$CPUcount" -gt 1 ] && echo "$CPUcount CPU highest = $(format_temp_f absolute "$CPUn")"
         [[ ! -z "$AMBTEMP" ]] && echo "Ambient = $(format_temp_f absolute "$AMBTEMP")"
@@ -714,7 +726,7 @@ if [ $Logtype -eq 2 ]; then
                         echo "Delta Ratio = : $DeltaR "
                         echo "Delta A/E = $(format_temp_f delta "$vTEMP")"
                 else
-                        echo "Virtual Temp = $(format_temp_f delta "+$vTEMP")"
+                        echo "Virtual Temp = $(format_temp_f absolute "$vTEMP")"
                 fi
         fi
 fi
@@ -805,7 +817,7 @@ if [ $CPUcount -eq 0 ]; then
                                                 fi
                                                 AMBloop_arg1=$AMBTEMP
                                                 AMBloop_arg2="${!TEMP_STEPloop}"
-                                                AMBloop_arg3="${!FSTloop}"
+                                                AMBloop_arg3="$(apply_failsafe_floor "${!FSTloop}")"
                                                 break
                                         fi
                                 done
@@ -847,7 +859,8 @@ if [ $CPUcount -eq 0 ]; then
                                                 echo "$l sending command #setfanspeed $vTEMP°C ${!TEMP_STEPloop}°C ${!FSTloop}%"
                                                 echo "$l Ambient temperature Fan Speed control - Stop"
                                         fi
-                                        setfanspeed $vTEMP "${!TEMP_STEPloop}" "${!FSTloop}" 0
+                                        SAFE_AMB_FS="$(apply_failsafe_floor "${!FSTloop}")"
+                                        setfanspeed $vTEMP "${!TEMP_STEPloop}" "$SAFE_AMB_FS" 0
                                         break
                                 fi
                         done
