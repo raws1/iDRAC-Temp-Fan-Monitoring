@@ -572,10 +572,9 @@ if [ "$CPUcount" -gt 1 ]; then
     fi
 fi
 if [ $TEMPgov -eq 1 ] || [ $((CPUh-CPUl)) -gt $CPUdelta ]; then
-        echo "!! CPU DELTA Exceeded !!"
+        echo "!! CPU spread exceeded !!"
         echo "Lowest : $(format_temp_f absolute "$CPUl")"
         echo "Highest: $(format_temp_f absolute "$CPUh")"
-        echo "Delta Max: $(format_temp_f delta "$CPUdelta")"
         echo "Switching CPU profile..."
         CPUdeltatest=1
         CPUn=$CPUh
@@ -716,18 +715,9 @@ if [ $Logtype -eq 2 ]; then
         [[ ! -z "$AMBTEMP" ]] && echo "Ambient = $(format_temp_f absolute "$AMBTEMP")"
         [[ ! -z "$EXHTEMP" ]] && echo "Exhaust = $(format_temp_f absolute "$EXHTEMP")"
         [[ "$CPUcount" != 0 ]] && [[ "$TEMPMOD" != 0 ]] && echo "TEMPMOD = $(format_temp_f delta "+$TEMPMOD")"
-        if [ "$CPUcount" -ge 1 ]; then 
-                [ -z "$CPUdeltatest" ] && echo "CPUdelta = $(format_temp_f delta "$CPUdelta")" || echo "CPUdelta EX! = $(format_temp_f delta "$CPUdelta")"
-        fi
-        if [ "$CPUcount" != 0 ]; then
-                echo  "vTEMP = $(format_temp_f absolute "$vTEMP")"
-        else
-                if $AMBDeltaMode ; then
-                        echo "Delta Ratio = : $DeltaR "
-                        echo "Delta A/E = $(format_temp_f delta "$vTEMP")"
-                else
-                        echo "Virtual Temp = $(format_temp_f absolute "$vTEMP")"
-                fi
+        if [ "$CPUcount" = 0 ] && $AMBDeltaMode ; then
+                echo "Delta Ratio = : $DeltaR "
+                echo "Delta A/E = $(format_temp_f delta "$vTEMP")"
         fi
 fi
 if [ $Logtype -eq 3 ]; then
@@ -744,21 +734,12 @@ if [ $Logtype -eq 3 ]; then
         [ "$TEMPgov" -eq 1 ] && [ "$CPUcount" -gt 1 ] && printf '%s\t%4s\t%12s\n' "$CPUcount CPU highest" "OK" "$CPUn °C"
         [[ ! -z "$AMBTEMP" ]] && printf '%s\t%4s\t%12s\n' "Ambient" "OK" "$AMBTEMP °C" || printf '%s\t%4s\t%12s\n' "Ambient" "NO" "NaN " 
         [[ ! -z "$EXHTEMP" ]] && printf '%s\t%4s\t%12s\n' "Exhaust" "OK" "$EXHTEMP °C" || printf '%s\t%4s\t%12s\n' "Exhaust" "NO" "NaN " 
-        if [ "$CPUcount" -ge 1 ]; then 
-                [ -z "$CPUdeltatest" ] && printf '%s\t%4s\t%12s\n' "CPUdelta" "OK" "$CPUdelta °C" || printf '%s\t%4s\t%12s\n' "CPUdelta" "EX" "$CPUdelta °C"
-        fi
         if [ "$CPUcount" != 0 ]; then
                 [[ "$TEMPMOD" != 0 ]] && printf '%s\t%4s\t%12s\n' "TEMPMOD" "OK" "+$TEMPMOD °C" || printf '%s\t%4s\t%12s\n' "TEMPMOD" "NO" "NaN "
         fi
-        if [ "$CPUcount" != 0 ]; then
-                [[ "$vTEMP" != "$CPUn" ]] && printf '%s\t%4s\t%12s\n' "vTEMP" "OK" "$vTEMP °C" || printf '%s\t%4s\t%12s\n' "vTEMP" "EQ" "$vTEMP °C" 
-        else
-                if $AMBDeltaMode ; then
-                        printf '%s\t%4s\t%12s\n' "Delta Ratio" "OK" ":$DeltaR "
-                        printf '%s\t%4s\t%12s\n' "Delta A/E" "OK" "+$vTEMP °C"
-                else
-                        printf '%s\t%4s\t%12s\n' "vTEMP" "OK" "$vTEMP °C"
-                fi
+        if [ "$CPUcount" = 0 ] && $AMBDeltaMode ; then
+                printf '%s\t%4s\t%12s\n' "Delta Ratio" "OK" ":$DeltaR "
+                printf '%s\t%4s\t%12s\n' "Delta A/E" "OK" "+$vTEMP °C"
         fi
         ) | column -t -s $'\t'
 fi

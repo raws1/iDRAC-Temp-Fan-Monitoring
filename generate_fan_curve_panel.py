@@ -131,7 +131,7 @@ def build_panel_html(config: dict[str, object]) -> str:
     ambient_speeds: dict[int, int] = config["ambient_speeds"]  # type: ignore[assignment]
     scalar: dict[str, str] = config["scalar"]  # type: ignore[assignment]
 
-    required_scalars = ("TEMPgov", "CPUdelta", "DeltaR", "EXHTEMP_MAX", "MAX_MOD")
+    required_scalars = ("TEMPgov", "DeltaR", "EXHTEMP_MAX", "MAX_MOD")
     missing = [name for name in required_scalars if name not in scalar]
     if missing:
         raise ValueError(f"Missing scalar settings: {', '.join(missing)}")
@@ -191,10 +191,6 @@ def build_panel_html(config: dict[str, object]) -> str:
   <div class="metric">
     <span class="metric-label">CPU Governor</span>
     <span class="metric-value">{html.escape(governor_label(scalar["TEMPgov"]))}</span>
-  </div>
-  <div class="metric">
-    <span class="metric-label">CPU Delta Safeguard</span>
-    <span class="metric-value">{html.escape(format_temp_f(int(scalar["CPUdelta"]), delta=True))} spread limit</span>
   </div>
   <div class="metric">
     <span class="metric-label">Delta A/E Ratio</span>
