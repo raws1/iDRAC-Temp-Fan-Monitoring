@@ -295,6 +295,12 @@
       border-radius: 8px;
       padding: 12px;
     }
+    .history-media {
+      position: relative;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #0d1117;
+    }
     .history-view-header {
       display: flex;
       justify-content: space-between;
@@ -315,6 +321,37 @@
     .history-view img {
       max-height: clamp(260px, 42vh, 560px);
       margin-bottom: 10px;
+    }
+    .history-overlay {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(13, 17, 23, 0.76);
+      backdrop-filter: blur(4px);
+      text-align: center;
+      pointer-events: none;
+    }
+    .history-overlay-message {
+      border: 1px solid rgba(255, 123, 114, 0.45);
+      background: rgba(22, 27, 34, 0.92);
+      color: #ffb3ad;
+      padding: 14px 18px;
+      border-radius: 999px;
+      font-size: clamp(16px, 2vw, 24px);
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+    }
+    .history-card.is-host-unresponsive .history-overlay {
+      display: flex;
+    }
+    .history-card.is-host-unresponsive img {
+      opacity: 0.24;
+      filter: grayscale(0.3);
     }
     .image-links {
       display: flex;
@@ -400,7 +437,12 @@
                 <h3 class="history-view-label" data-history-label>Daily</h3>
                 <span class="history-view-caption">Temperature trend</span>
               </div>
-              <img alt="Temperature graph" data-history-image>
+              <div class="history-media">
+                <img alt="Temperature graph" data-history-image>
+                <div class="history-overlay" aria-hidden="true">
+                  <span class="history-overlay-message">Host Not Responding</span>
+                </div>
+              </div>
               <div class="image-links">
                 <a href="#" target="_blank" rel="noopener" data-history-link>Open Daily SVG</a>
               </div>
@@ -422,7 +464,12 @@
                 <h3 class="history-view-label" data-history-label>Daily</h3>
                 <span class="history-view-caption">Fan RPM trend</span>
               </div>
-              <img alt="Fan speed graph" data-history-image>
+              <div class="history-media">
+                <img alt="Fan speed graph" data-history-image>
+                <div class="history-overlay" aria-hidden="true">
+                  <span class="history-overlay-message">Host Not Responding</span>
+                </div>
+              </div>
               <div class="image-links">
                 <a href="#" target="_blank" rel="noopener" data-history-link>Open Daily SVG</a>
               </div>
@@ -466,6 +513,7 @@
     const hostState = {
       hosts: [],
       selectedSlug: '',
+      statusBySlug: {},
     };
     const HOST_STORAGE_KEY = 'delltemps:selected-host';
 
@@ -526,9 +574,32 @@
       return hostState.hosts.find((entry) => entry.slug === hostState.selectedSlug) || hostState.hosts[0] || getFallbackHosts()[0];
     }
 
+    function getActiveHostStatus() {
+      const activeHost = getActiveHost();
+      return hostState.statusBySlug[activeHost.slug || ''] || { isUnresponsive: false, statusText: '' };
+    }
+
     function hostAssetPath(fileName) {
       const activeHost = getActiveHost();
       return activeHost.basePath ? `${activeHost.basePath}/${fileName}` : fileName;
+    }
+
+    function statusMeansHostNotResponding(statusText) {
+      if (!statusText) {
+        return true;
+      }
+      return /waiting for stable sensor discovery|ERROR:/i.test(statusText);
+    }
+
+    function applyHostHealthToPanels() {
+      const activeStatus = getActiveHostStatus();
+      document.querySelectorAll('[data-history-panel]').forEach((panelEl) => {
+        panelEl.classList.toggle('is-host-unresponsive', Boolean(activeStatus.isUnresponsive));
+        const overlayEl = panelEl.querySelector('.history-overlay');
+        if (overlayEl) {
+          overlayEl.setAttribute('title', activeStatus.statusText || 'Host Not Responding');
+        }
+      });
     }
 
     function renderHostButtons() {
@@ -567,6 +638,8 @@
       renderHostButtons();
       updateHostSubtitle();
       refreshHistoryPanels();
+      applyHostHealthToPanels();
+      loadHostStatus();
       loadTempSummaryPanel();
       loadFanSummaryPanel();
       loadFancontrolLog();
@@ -599,6 +672,28 @@
       const requestedSlug = params.get('host') || getStoredHostSlug();
       const selected = hostState.hosts.find((entry) => entry.slug === requestedSlug) || hostState.hosts[0];
       setSelectedHost(selected.slug, false);
+    }
+
+    async function loadHostStatus() {
+      const activeHost = getActiveHost();
+      const key = activeHost.slug || '';
+      try {
+        const response = await fetch(`${hostAssetPath('status.txt')}?t=${Date.now()}`, { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const statusText = (await response.text()).trim();
+        hostState.statusBySlug[key] = {
+          isUnresponsive: statusMeansHostNotResponding(statusText),
+          statusText,
+        };
+      } catch (err) {
+        hostState.statusBySlug[key] = {
+          isUnresponsive: true,
+          statusText: `Unable to load host status: ${err.message}`,
+        };
+      }
+      applyHostHealthToPanels();
     }
 
     function setHistoryTab(panelEl, range) {
@@ -765,6 +860,7 @@
     loadAlertStatusPanel();
     loadFanCurvePanel();
     loadHostsManifest();
+    setInterval(loadHostStatus, 15000);
     setInterval(loadFancontrolLog, 15000);
     setInterval(loadTempSummaryPanel, 15000);
     setInterval(loadFanSummaryPanel, 15000);
