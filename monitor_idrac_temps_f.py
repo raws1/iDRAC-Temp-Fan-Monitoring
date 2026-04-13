@@ -275,6 +275,15 @@ def discover_initial_sensor_config(
     status_path: Path,
 ) -> Tuple[str, str, List[str]]:
     retry_seconds = max(1, int(os.environ.get("INITIAL_SENSOR_DISCOVERY_RETRY_SECONDS", "10")))
+    cpu1_backoff_after_seconds = max(
+        retry_seconds,
+        int(os.environ.get("INITIAL_SENSOR_DISCOVERY_CPU1_FAST_RETRY_WINDOW_SECONDS", "300")),
+    )
+    cpu1_backoff_retry_seconds = max(
+        retry_seconds,
+        int(os.environ.get("INITIAL_SENSOR_DISCOVERY_CPU1_BACKOFF_RETRY_SECONDS", "3600")),
+    )
+    cpu1_missing_since: float | None = None
 
     while True:
         try:
@@ -289,14 +298,23 @@ def discover_initial_sensor_config(
 
             return inlet_sensor_name, cpu1_sensor_name, fan_sensor_names
         except Exception as exc:
+            now_epoch = time.time()
+            current_retry_seconds = retry_seconds
+            if "Could not locate cpu1 sensor" in str(exc):
+                if cpu1_missing_since is None:
+                    cpu1_missing_since = now_epoch
+                if (now_epoch - cpu1_missing_since) >= cpu1_backoff_after_seconds:
+                    current_retry_seconds = cpu1_backoff_retry_seconds
+            else:
+                cpu1_missing_since = None
             ts_text = display_now().strftime("%Y-%m-%d %I:%M:%S %p %Z")
             message = (
                 f"{ts_text} waiting for stable sensor discovery on {host}: {exc} "
-                f"(retrying in {retry_seconds}s)"
+                f"(retrying in {current_retry_seconds}s)"
             )
             status_path.write_text(message + "\n", encoding="utf-8")
             print(message, file=sys.stderr)
-            time.sleep(retry_seconds)
+            time.sleep(current_retry_seconds)
 
 
 def get_temp_values_c(
